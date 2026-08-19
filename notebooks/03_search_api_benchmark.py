@@ -2,6 +2,11 @@
 # jupyter:
 #   jupytext:
 #     formats: py:percent
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.19.5
 # ---
 
 # %% [markdown]
@@ -30,23 +35,30 @@ import httpx
 
 # %%
 ROOT = Path(_setup.__file__).resolve().parent.parent
-proc = subprocess.Popen(
-    ["uvicorn", "app.main:app", "--port", "8000", "--log-level", "warning"],
-    cwd=str(ROOT),
-)
-
-# Đợi server up + warm (Searcher.from_corpus loads embeddings + indexes 1000 docs)
 URL = "http://localhost:8000"
-for _ in range(60):
-    try:
-        r = httpx.get(f"{URL}/healthz", timeout=2.0)
-        if r.status_code == 200 and r.json().get("ready"):
-            break
-    except httpx.HTTPError:
-        pass
-    time.sleep(1)
-else:
-    raise RuntimeError("API didn't become ready within 60s")
+proc = None
+
+try:
+    r = httpx.get(f"{URL}/healthz", timeout=1.0)
+    if r.status_code == 200 and r.json().get("ready"):
+        print("Reusing already running API server on :8000")
+    else:
+        raise httpx.HTTPError("not ready")
+except Exception:
+    proc = subprocess.Popen(
+        ["uvicorn", "app.main:app", "--port", "8000", "--log-level", "warning"],
+        cwd=str(ROOT),
+    )
+    for _ in range(600):
+        try:
+            r = httpx.get(f"{URL}/healthz", timeout=2.0)
+            if r.status_code == 200 and r.json().get("ready"):
+                break
+        except httpx.HTTPError:
+            pass
+        time.sleep(1)
+    else:
+        raise RuntimeError("API didn't become ready within 600s")
 
 print(httpx.get(f"{URL}/healthz").json())
 
@@ -127,9 +139,12 @@ else:
 # ## 5. Cleanup — stop the API server
 
 # %%
-proc.terminate()
-proc.wait(timeout=5)
-print("API server stopped")
+if proc is not None:
+    proc.terminate()
+    proc.wait(timeout=5)
+    print("API server stopped")
+else:
+    print("API server was external; left running")
 
 # %% [markdown]
 # ## Deliverable evidence

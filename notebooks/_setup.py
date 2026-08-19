@@ -26,3 +26,9 @@ if str(_REPO_ROOT) not in sys.path:
 _BIN = Path(sys.executable).parent
 if str(_BIN) not in os.environ.get("PATH", "").split(os.pathsep):
     os.environ["PATH"] = f"{_BIN}{os.pathsep}{os.environ.get('PATH', '')}"
+
+# Thread pool optimization for multi-core CPUs — avoids OpenMP / ONNX thread contention
+os.environ.setdefault("OMP_NUM_THREADS", "4")
+os.environ.setdefault("MKL_NUM_THREADS", "4")
+os.environ.setdefault("PYTHONUNBUFFERED", "1")
+
